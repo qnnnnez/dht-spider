@@ -321,6 +321,8 @@ class DHTInstance:
             except DHTQueryTimeoutError:
                 continue
             self.good_nodes.add(id)
+            if b'nodes' not in r:
+                continue
             for info in NodeContactInfo.iter_decode(r[b'nodes']):
                 if info.id == self.id:
                     self._update_kbucket(self.id, info.ip, info.port)
