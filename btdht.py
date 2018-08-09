@@ -90,7 +90,7 @@ class NodeContactInfo:
     bin_format = struct.Struct('!20s4sH')
 
 
-class DHTInstance:
+class DHTNode:
     def __init__(self, id, ip, port, client_version=b'DS00', loop=None, krpc_timeout=5.0):
         if not isinstance(id, int):
             id = decode_id(id)
