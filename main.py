@@ -1,10 +1,10 @@
 import os
 import asyncio
-from btdht import DHTInstance
+from btdht import DHTNode
 
 
 async def up():
-    i = DHTInstance(os.urandom(20), '0.0.0.0', 11451)
+    i = DHTNode(os.urandom(20), '0.0.0.0', 11451)
     print('listening on {}:{}, my id: {:020X}'.format(i.ip, i.port, i.id))
     await i.async_bind()
     print('bootstrap process start')

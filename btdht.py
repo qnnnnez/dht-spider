@@ -293,11 +293,11 @@ class DHTNode:
                 pass
 
         await asyncio.wait(
-            [asyncio.ensure_future(ping(ip, port), loop=self._loop) for ip, port in bootstrap_nodes],
+            [asyncio.ensure_future(ping(socket.gethostbyname(ip), port), loop=self._loop) for ip, port in bootstrap_nodes],
             loop=self._loop
         )
         if len(list(self.kbucket.keys())) == 0:
-            raise RuntimeError('bootstrap failed: cannot contact every bootstrap nodes: [{}]'.format(
+            raise RuntimeError('bootstrap failed: cannot contact any bootstrap nodes: [{}]'.format(
                 ', '.join('{}:{}'.format(ip, port) for ip, port in bootstrap_nodes)
             ))
 
@@ -317,7 +317,7 @@ class DHTNode:
             if id in self.good_nodes:
                 continue
             try:
-                r = await self.async_query('find_node', ip, port, id=self.id, timeout=1)
+                r = await self.async_query('find_node', ip, port, id=self.id)
             except DHTQueryTimeoutError:
                 continue
             self.good_nodes.add(id)
