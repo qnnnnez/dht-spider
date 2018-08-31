@@ -127,6 +127,25 @@ class DHTNode:
         self.announcements = AnnouncementStorage(ANNOUNCEMENT_STORAGE_SIZE)
         self.good_nodes = {self.id}
 
+    def save_dht(self, output):
+        for id, (ip, port) in self.kbucket.items():
+            output.write(NodeContactInfo(id, ip, port).encode())
+        output.write(NodeContactInfo(114514, '0.0.0.0', 0).encode())
+
+    def load_dht(self, input):
+        node_info_size = NodeContactInfo.bin_format.size
+        while True:
+            data = input.read(node_info_size)
+            if data == b'':
+                break
+            if len(data) < node_info_size:
+                raise ValueError('truncated data')
+            info = NodeContactInfo.decode(data)
+            if info.id == 114514 and info.ip == 0 and info.port == 0:
+                break
+            self._update_kbucket(info.id, info.ip, info.port)
+
+
     async def async_bind(self):
         transport, protocol = await self._loop.create_datagram_endpoint(
             lambda: DHTProtocol(self), local_addr=(self.ip, self.port)
@@ -303,6 +322,26 @@ class DHTNode:
 
         while not self.bootstraped:
             await self.keep_dht()
+            nodes = list(self.kbucket.items())
+            nodes.sort(key=lambda x: x[0] ^ self.id, reverse=False)
+            if len(nodes) > 64:
+                nodes = nodes[:64]
+            print(hex(nodes[0][0]))
+            for id, (ip, port) in nodes:
+                if id == self.id:
+                    continue
+                try:
+                    r = await self.async_query('find_node', ip, port, timeout=0.6, id=self.id)
+                except DHTQueryTimeoutError:
+                    continue
+                self.good_nodes.add(id)
+                if b'nodes' not in r:
+                    continue
+                for info in NodeContactInfo.iter_decode(r[b'nodes']):
+                    if info.id == self.id:
+                        self._update_kbucket(self.id, info.ip, info.port)
+                    else:
+                        asyncio.ensure_future(ping(info.ip, info.port), loop=self._loop)
 
         self.event_bootstrap_done.set()
 
@@ -317,7 +356,7 @@ class DHTNode:
             if id in self.good_nodes:
                 continue
             try:
-                r = await self.async_query('find_node', ip, port, id=self.id)
+                r = await self.async_query('find_node', ip, port, timeout=0.6, id=self.id)
             except DHTQueryTimeoutError:
                 continue
             self.good_nodes.add(id)
