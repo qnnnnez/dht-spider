@@ -20,15 +20,25 @@ class DHTQueryTimeoutError(BaseException):
     pass
 
 
+class BadDHTMessageError(BaseException):
+    pass
+
+
+class BadIDError(BaseException):
+    pass
+
+
 def encode_id(id):
     assert isinstance(id, int)
-    assert id < 2 ** ID_LENGTH
+    if id >= 2 ** ID_LENGTH:
+        raise BadIDError('ID too long')
     return binascii.unhexlify('{:040X}'.format(id))
 
 
 def decode_id(data):
     assert isinstance(data, bytes)
-    assert len(data) <= ID_LENGTH
+    if len(data) * 8 > ID_LENGTH:
+        raise BadIDError('ID too long')
     return int(binascii.hexlify(data), base=16)
 
 
@@ -376,22 +386,22 @@ class DHTNode:
         try:
             msg = bencoder.decode(data)
         except:
-            return
+            raise BadDHTMessageError('not properly bencoded')
 
         try:
             transaction_id = msg[b't']
             message_type = msg[b'y']
         except KeyError:
-            return
+            raise BadDHTMessageError('bad dict')
 
         if message_type == b'q':    # received a query
             query_type = msg.get(b'q')
             arg = msg.get(b'a')
             if not query_type or not arg:
-                return
+                raise BadDHTMessageError('bad query')
             method = self._query_handler_method_map.get(query_type)
             if not method:
-                return
+                raise BadDHTMessageError('unknown query type')
             response = method(arg, ip, port)
             if not response:
                 return
@@ -408,11 +418,11 @@ class DHTNode:
         elif message_type == b'r':    # received a response
             arg = msg.get(b'r')
             if not arg:
-                return
+                raise BadDHTMessageError('bad response')
             future_key = (ip, port, transaction_id)
             future = self._query_future_map.get(future_key)
             if not future:
-                return
+                raise BadDHTMessageError('response without query')
             del self._query_future_map[future_key]
             future.set_result(arg)
 
@@ -420,7 +430,7 @@ class DHTNode:
             if remote_id is not None:
                 self._update_kbucket(decode_id(remote_id), ip, port)
         else:
-            return
+            raise BadDHTMessageError('unknown message type')
 
     def _update_kbucket(self, id, ip, port):
         self.kbucket.add(id, (ip, port))
@@ -454,7 +464,12 @@ class DHTProtocol(asyncio.Transport):
         self.transport = transport
 
     def datagram_received(self, data, addr):
-        self.dht_instance.feed_datagram(data, addr)
+        try:
+            self.dht_instance.feed_datagram(data, addr)
+        except BadDHTMessageError:
+            pass
+        except BadIDError:
+            pass
 
     def error_received(self, exc):
         print(exc)
