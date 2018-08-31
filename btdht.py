@@ -145,7 +145,6 @@ class DHTNode:
                 break
             self._update_kbucket(info.id, info.ip, info.port)
 
-
     async def async_bind(self):
         transport, protocol = await self._loop.create_datagram_endpoint(
             lambda: DHTProtocol(self), local_addr=(self.ip, self.port)
@@ -219,7 +218,7 @@ class DHTNode:
         self.transport.sendto(bencoder.encode(payload), (ip, port))
         return transaction_id
 
-    def _send_announce_peer(self, info_hash, token, ip, port):
+    def _send_announce_peer(self, info_hash, token, ip, port, downloader_port):
         transaction_id = self._generate_transaction_id()
         payload = {
             b't': transaction_id,
@@ -229,7 +228,7 @@ class DHTNode:
                 b'id': self.packed_id,
                 b'info_hash': encode_id(info_hash),
                 b'token': token,
-                b'port': self.port,
+                b'port': downloader_port,
                 b'implied_port': ANNOUNCE_IMPLIED_PORT,
             },
         }
